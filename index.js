@@ -1,6 +1,3 @@
-626f6c742d63632d6167656e74Full updated `index.js`:
-
-```javascript
 import 'dotenv/config';
 import express from 'express';
 import axios from 'axios';
@@ -221,4 +218,3 @@ app.use((err, _req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`Runway RPC worker listening on :${PORT}`);
 });
-```
