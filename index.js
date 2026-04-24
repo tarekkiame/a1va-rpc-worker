@@ -146,13 +146,21 @@ app.post('/start-session', async (req, res) => {
     ragEnabled,
   } = body;
 
+  const rpcSessionId = runwaySessionId || sessionId;
+
   console.log('Parsed:', { sessionId, avatarId, ragEnabled });
   console.log(`Webhook received for session ${sessionId}`);
+  console.log('[start-session] ids', {
+    sessionId,
+    runwaySessionId,
+    rpcSessionId,
+  });
   console.log('[start-session] payload', {
     sessionId,
     avatarId,
     ragEnabled,
     runwaySessionId: runwaySessionId ? '<present>' : undefined,
+    rpcSessionId,
     roomName,
     hasLivekitUrl: !!livekitUrl,
     hasLivekitToken: !!livekitToken,
@@ -182,14 +190,14 @@ app.post('/start-session', async (req, res) => {
   console.log(`[session:${sessionId}] Starting RPC session...`);
 
   startSession({
-    sessionId,
+    sessionId: rpcSessionId,
     avatarId,
     livekitUrl,
     livekitToken,
     supabaseUrl,
   }).catch((err) => {
-    console.error(`[session:${sessionId}] failed to start`, err?.message || err);
-    activeSessions.delete(sessionId);
+    console.error(`[session:${rpcSessionId}] failed to start`, err?.message || err);
+    activeSessions.delete(rpcSessionId);
   });
 });
 
