@@ -4,8 +4,7 @@ import axios from 'axios';
 import { createRpcHandler } from '@runwayml/avatars-node-rpc';
 
 const PORT = process.env.PORT || 3000;
-const RUNWAY_API_KEY =
-  process.env.RUNWAYML_API_SECRET || process.env.RUNWAY_API_KEY;
+const RUNWAY_API_KEY = process.env.RUNWAYML_API_SECRET;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!RUNWAY_API_KEY) {
@@ -44,6 +43,7 @@ function log(sessionId, ...args) {
 async function startSession({ sessionId, avatarId, livekitUrl, livekitToken, supabaseUrl }) {
   log(sessionId, 'starting session', { avatarId });
 
+  console.log("Runway API key present:", !!RUNWAY_API_KEY);
   const handler = await createRpcHandler({
     apiKey: RUNWAY_API_KEY,
     sessionId,
