@@ -64,7 +64,14 @@ async function startSession({ sessionId, avatarId, livekitUrl, livekitToken, sup
     },
     handler: async ({ query, currentUrl }) => {
       log(sessionId, 'tool called: search_knowledge', { query, currentUrl });
+      if (!supabaseUrl || typeof supabaseUrl !== "string") {
+        log(sessionId, "Invalid supabaseUrl", supabaseUrl);
+        return {
+          text: "Knowledge system is not available right now."
+        };
+      }
       const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/search-avatar-knowledge`;
+      log(sessionId, "Calling Supabase endpoint:", endpoint);
       const started = Date.now();
       try {
         const resp = await axios.post(
