@@ -40,103 +40,60 @@ function log(sessionId, ...args) {
   console.log(`[session:${sessionId}]`, ...args);
 }
 
-async function startSession({ sessionId, avatarId, livekitUrl, livekitToken, supabaseUrl, roomName }) {
+async function startSession({ sessionId, avatarId, supabaseUrl }) {
   log(sessionId, 'starting session', { avatarId });
 
   console.log("Runway API key present:", !!RUNWAY_API_KEY);
-  if (!livekitUrl || typeof livekitUrl !== "string") {
-    log(sessionId, "Invalid livekitUrl", livekitUrl);
-    throw new Error("Invalid livekitUrl");
-  }
-  if (!livekitToken || typeof livekitToken !== "string") {
-    log(sessionId, "Invalid livekitToken", livekitToken);
-    throw new Error("Invalid livekitToken");
-  }
-  log(sessionId, "LiveKit URL:", livekitUrl);
-  log(sessionId, "LiveKit token present:", !!livekitToken);
-  log(sessionId, "Room name:", roomName);
+
   const handler = await createRpcHandler({
     apiKey: RUNWAY_API_KEY,
     sessionId,
-    livekitUrl,
-    livekitToken,
-    roomName,
-  });
-
-  handler.registerTool({
-    name: 'search_knowledge',
-    description: 'Search the avatar knowledge base for information relevant to the user query.',
-    parameters: {
-      type: 'object',
-      properties: {
-        query: { type: 'string', description: 'The search query' },
-        currentUrl: { type: 'string', description: 'The current page URL context' },
-      },
-      required: ['query'],
-    },
-    handler: async ({ query, currentUrl }) => {
-      log(sessionId, 'tool called: search_knowledge', { query, currentUrl });
-      if (!supabaseUrl || typeof supabaseUrl !== "string") {
-        log(sessionId, "Invalid supabaseUrl", supabaseUrl);
-        return {
-          text: "Knowledge system is not available right now."
-        };
-      }
-      const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/search-avatar-knowledge`;
-      log(sessionId, "Calling Supabase endpoint:", endpoint);
-      const started = Date.now();
-      try {
-        const resp = await axios.post(
-          endpoint,
-          { avatarId, query, currentUrl, maxResults: 5 },
-          {
-            headers: {
-              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            timeout: 15000,
-          }
-        );
-        const elapsed = Date.now() - started;
-        log(sessionId, `supabase responded in ${elapsed}ms`, { status: resp.status });
-        const results = resp.data?.results || [];
-        if (!results.length) {
-          return {
-            text: "No relevant information found in the website knowledge."
-          };
+    tools: {
+      search_knowledge: async ({ query, currentUrl }) => {
+        log(sessionId, 'tool called: search_knowledge', { query, currentUrl });
+        if (!supabaseUrl || typeof supabaseUrl !== "string") {
+          log(sessionId, "Invalid supabaseUrl", supabaseUrl);
+          return { text: "Knowledge system is not available right now." };
         }
-        const formatted = results.map(r =>
-          `Title: ${r.title}\nURL: ${r.url}\nContent: ${r.snippet}`
-        ).join('\n\n');
-        return {
-          text: formatted
-        };
-      } catch (err) {
-        const elapsed = Date.now() - started;
-        log(sessionId, `supabase error after ${elapsed}ms`, err?.response?.status, err?.message);
-        return { error: 'search_failed', message: err?.message || 'unknown error', results: [] };
-      }
+        const endpoint = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/search-avatar-knowledge`;
+        log(sessionId, "Calling Supabase endpoint:", endpoint);
+        const started = Date.now();
+        try {
+          const resp = await axios.post(
+            endpoint,
+            { avatarId, query, currentUrl, maxResults: 5 },
+            {
+              headers: {
+                Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+                'Content-Type': 'application/json',
+              },
+              timeout: 15000,
+            }
+          );
+          const elapsed = Date.now() - started;
+          log(sessionId, `supabase responded in ${elapsed}ms`, { status: resp.status });
+          const results = resp.data?.results || [];
+          if (!results.length) {
+            return { text: "No relevant information found in the website knowledge." };
+          }
+          const formattedResults = results.map(r =>
+            `Title: ${r.title}\nURL: ${r.url}\nContent: ${r.snippet}`
+          ).join('\n\n');
+          return { text: formattedResults };
+        } catch (err) {
+          const elapsed = Date.now() - started;
+          log(sessionId, `supabase error after ${elapsed}ms`, err?.response?.status, err?.message);
+          return { text: "Search failed." };
+        }
+      },
     },
-  });
-
-  await Promise.race([
-    handler.connect(),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('connect timeout')), 10000)
-    )
-  ]);
-  log(sessionId, 'connected to Runway / LiveKit');
-  log(sessionId, 'RPC tools registered and ready');
-
-  if (typeof handler.on === 'function') {
-    handler.on('disconnect', () => {
-      log(sessionId, 'disconnected');
+    onConnected: () => log(sessionId, "connected to Runway / LiveKit"),
+    onDisconnected: () => {
+      log(sessionId, "disconnected");
       activeSessions.delete(sessionId);
-    });
-    handler.on('error', (err) => {
-      log(sessionId, 'handler error', err?.message || err);
-    });
-  }
+    },
+    onError: (err) => log(sessionId, "handler error", err?.message || err),
+  });
 
   activeSessions.set(sessionId, handler);
   return handler;
@@ -150,7 +107,7 @@ app.post('/start-session', async (req, res) => {
   console.log('Raw body received:', req.body);
 
   if (!req.body || Object.keys(req.body).length === 0) {
-    console.log('⚠️ Empty body received from webhook');
+    console.log('Empty body received from webhook');
   }
 
   const body = req.body || {};
@@ -158,9 +115,6 @@ app.post('/start-session', async (req, res) => {
     sessionId,
     avatarId,
     runwaySessionId,
-    livekitUrl,
-    livekitToken,
-    roomName,
     supabaseUrl,
     ragEnabled,
   } = body;
@@ -180,9 +134,6 @@ app.post('/start-session', async (req, res) => {
     ragEnabled,
     runwaySessionId: runwaySessionId ? '<present>' : undefined,
     rpcSessionId,
-    roomName,
-    hasLivekitUrl: !!livekitUrl,
-    hasLivekitToken: !!livekitToken,
     hasSupabaseUrl: !!supabaseUrl,
   });
 
@@ -199,9 +150,9 @@ app.post('/start-session', async (req, res) => {
     });
   }
 
-  if (activeSessions.has(sessionId)) {
-    console.log(`[start-session] session ${sessionId} already running`);
-    return res.status(200).json({ status: 'already_running', sessionId });
+  if (activeSessions.has(rpcSessionId)) {
+    console.log(`[start-session] session ${rpcSessionId} already running`);
+    return res.status(200).json({ status: 'already_running', sessionId: rpcSessionId });
   }
 
   res.status(202).json({ status: 'starting', sessionId });
@@ -211,10 +162,7 @@ app.post('/start-session', async (req, res) => {
   startSession({
     sessionId: rpcSessionId,
     avatarId,
-    livekitUrl,
-    livekitToken,
     supabaseUrl,
-    roomName,
   }).catch((err) => {
     console.error(`[session:${rpcSessionId}] failed to start`, err?.message || err);
     activeSessions.delete(rpcSessionId);
@@ -228,11 +176,9 @@ app.post('/stop-session', async (req, res) => {
     return res.status(404).json({ status: 'not_found' });
   }
   try {
-    if (typeof handler.disconnect === 'function') {
-      await handler.disconnect();
-    }
+    await handler.close();
   } catch (err) {
-    console.error(`[session:${sessionId}] disconnect error`, err?.message || err);
+    console.error(`[session:${sessionId}] close error`, err?.message || err);
   }
   activeSessions.delete(sessionId);
   res.json({ status: 'stopped', sessionId });
