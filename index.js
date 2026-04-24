@@ -44,6 +44,16 @@ async function startSession({ sessionId, avatarId, livekitUrl, livekitToken, sup
   log(sessionId, 'starting session', { avatarId });
 
   console.log("Runway API key present:", !!RUNWAY_API_KEY);
+  if (!livekitUrl || typeof livekitUrl !== "string") {
+    log(sessionId, "Invalid livekitUrl", livekitUrl);
+    throw new Error("Invalid livekitUrl");
+  }
+  if (!livekitToken || typeof livekitToken !== "string") {
+    log(sessionId, "Invalid livekitToken", livekitToken);
+    throw new Error("Invalid livekitToken");
+  }
+  log(sessionId, "LiveKit URL:", livekitUrl);
+  log(sessionId, "LiveKit token present:", !!livekitToken);
   const handler = await createRpcHandler({
     apiKey: RUNWAY_API_KEY,
     sessionId,
