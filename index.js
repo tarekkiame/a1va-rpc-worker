@@ -40,7 +40,7 @@ function log(sessionId, ...args) {
   console.log(`[session:${sessionId}]`, ...args);
 }
 
-async function startSession({ sessionId, avatarId, livekitUrl, livekitToken, supabaseUrl }) {
+async function startSession({ sessionId, avatarId, livekitUrl, livekitToken, supabaseUrl, roomName }) {
   log(sessionId, 'starting session', { avatarId });
 
   console.log("Runway API key present:", !!RUNWAY_API_KEY);
@@ -54,11 +54,13 @@ async function startSession({ sessionId, avatarId, livekitUrl, livekitToken, sup
   }
   log(sessionId, "LiveKit URL:", livekitUrl);
   log(sessionId, "LiveKit token present:", !!livekitToken);
+  log(sessionId, "Room name:", roomName);
   const handler = await createRpcHandler({
     apiKey: RUNWAY_API_KEY,
     sessionId,
     livekitUrl,
     livekitToken,
+    roomName,
   });
 
   handler.registerTool({
@@ -212,6 +214,7 @@ app.post('/start-session', async (req, res) => {
     livekitUrl,
     livekitToken,
     supabaseUrl,
+    roomName,
   }).catch((err) => {
     console.error(`[session:${rpcSessionId}] failed to start`, err?.message || err);
     activeSessions.delete(rpcSessionId);
