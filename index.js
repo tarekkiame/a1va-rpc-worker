@@ -16,6 +16,7 @@ if (!SUPABASE_SERVICE_ROLE_KEY) {
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 
 const activeSessions = new Map();
 
@@ -117,35 +118,66 @@ app.get('/health', (_req, res) => {
 });
 
 app.post('/start-session', async (req, res) => {
+  console.log('Raw body received:', req.body);
+
+  if (!req.body || Object.keys(req.body).length === 0) {
+    console.log('⚠️ Empty body received from webhook');
+  }
+
+  const body = req.body || {};
   const {
     sessionId,
     avatarId,
+    runwaySessionId,
     livekitUrl,
     livekitToken,
+    roomName,
     supabaseUrl,
     ragEnabled,
-  } = req.body || {};
+  } = body;
 
-  if (!ragEnabled) {
+  console.log('Parsed:', { sessionId, avatarId, ragEnabled });
+  console.log(`Webhook received for session ${sessionId}`);
+  console.log('[start-session] payload', {
+    sessionId,
+    avatarId,
+    ragEnabled,
+    runwaySessionId: runwaySessionId ? '<present>' : undefined,
+    roomName,
+    hasLivekitUrl: !!livekitUrl,
+    hasLivekitToken: !!livekitToken,
+    hasSupabaseUrl: !!supabaseUrl,
+  });
+
+  if (ragEnabled !== true) {
     console.log('[start-session] rag disabled, skipping', { sessionId });
     return res.status(200).json({ status: 'skipped', reason: 'rag_disabled' });
   }
 
-  if (!sessionId || !avatarId || !livekitUrl || !livekitToken || !supabaseUrl) {
+  if (!sessionId) {
+    console.warn('[start-session] missing sessionId, aborting');
     return res.status(400).json({
       status: 'error',
-      error: 'missing_required_fields',
-      required: ['sessionId', 'avatarId', 'livekitUrl', 'livekitToken', 'supabaseUrl'],
+      error: 'missing_session_id',
     });
   }
 
   if (activeSessions.has(sessionId)) {
+    console.log(`[start-session] session ${sessionId} already running`);
     return res.status(200).json({ status: 'already_running', sessionId });
   }
 
   res.status(202).json({ status: 'starting', sessionId });
 
-  startSession({ sessionId, avatarId, livekitUrl, livekitToken, supabaseUrl }).catch((err) => {
+  console.log(`[session:${sessionId}] Starting RPC session...`);
+
+  startSession({
+    sessionId,
+    avatarId,
+    livekitUrl,
+    livekitToken,
+    supabaseUrl,
+  }).catch((err) => {
     console.error(`[session:${sessionId}] failed to start`, err?.message || err);
     activeSessions.delete(sessionId);
   });
